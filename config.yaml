@@ -1,0 +1,129 @@
+# ============================================================
+# Configuration unique du projet — AUCUNE valeur magique dans le code
+# ============================================================
+
+seed: 42
+
+data:
+  start: "2000-01-03"
+  end: "2025-12-31"
+  # nettoyage : un ticker est exclu si son premier prix valide est postérieur
+  # à start_max, ou si sa part de NaN sur la période dépasse max_missing_pct
+  start_max: "2000-03-31"
+  max_missing_pct: 0.02
+  raw_dir: "data/raw"
+  processed_path: "data/processed/returns.parquet"
+  prices_path: "data/processed/prices.parquet"
+  dollar_volume_path: "data/processed/dollar_volume.parquet"
+  stats_path: "data/processed/descriptive_stats.csv"
+  batch_size: 40
+  max_retries: 3
+  # Liste FIGÉE (reproductibilité) : ~250 constituants actuels du S&P 500,
+  # biais du survivant assumé et documenté (voir README, limites).
+  tickers:
+    # --- Tech / IT ---
+    [AAPL, MSFT, INTC, CSCO, ORCL, IBM, TXN, QCOM, ADBE, AMD, MU, HPQ, ADI,
+     KLAC, LRCX, AMAT, MCHP, NTAP, AKAM, JNPR, CTSH, INTU, ADSK, SNPS, CDNS,
+     ANSS, PTC, FFIV, VRSN, IT, GLW, TEL, APH, ROP, SWKS, TER, WDC, STX, JBL,
+     MSI, TDY, KEYS, NVDA, AVGO, CRM, NOW, PANW, FTNT, ACN, EPAM,
+     # --- Financières ---
+     JPM, BAC, WFC, C, GS, MS, AXP, USB, PNC, TFC, BK, STT, SCHW, COF, MET,
+     PRU, AFL, ALL, TRV, CB, AIG, PGR, CINF, GL, HIG, MMC, AON, AJG, BRO,
+     RJF, TROW, BEN, IVZ, NTRS, FITB, HBAN, KEY, RF, MTB, ZION, CMA, WRB,
+     SPGI, MCO, ICE, CME, NDAQ, MSCI, BLK, AMP, DFS, V, MA,
+     # --- Santé ---
+     JNJ, PFE, MRK, ABT, LLY, BMY, AMGN, GILD, BIIB, REGN, VRTX, UNH, CVS,
+     CI, ELV, HUM, CNC, DHR, TMO, BDX, BSX, SYK, MDT, EW, ISRG, ZBH, BAX,
+     A, HOLX, IDXX, RMD, COO, WAT, MTD, DGX, LH, MCK, CAH, UHS, HCA, DXCM,
+     ALGN, INCY, MRNA, ABBV, ZTS,
+     # --- Consommation ---
+     PG, KO, PEP, WMT, COST, TGT, HD, LOW, MCD, SBUX, YUM, NKE, TJX, ROST,
+     DLTR, KMB, CL, CLX, CHD, GIS, K, HSY, SJM, CPB, CAG, MKC, TSN, HRL,
+     ADM, MO, PM, STZ, BF-B, TAP, MNST, EL, RL, HAS, LEN, DHI, PHM, NVR,
+     MAS, WHR, F, GM, BBY, EBAY, AMZN, DIS, CMCSA, T, VZ, TMUS, CHTR, NFLX,
+     ORLY, AZO, GPC, TSCO, ULTA, LULU, POOL, DPZ, CMG, BKNG, EXPE, MAR, HLT,
+     # --- Énergie / Matériaux / Industrie ---
+     XOM, CVX, COP, OXY, EOG, SLB, HAL, DVN, APA, VLO, MPC, PSX, KMI, WMB,
+     OKE, GE, HON, MMM, CAT, DE, EMR, ETN, ITW, PH, CMI, PCAR, ROK, DOV,
+     SWK, FAST, GWW, UNP, CSX, NSC, UPS, FDX, LUV, DAL, UAL, BA, LMT, NOC,
+     GD, RTX, TXT, LHX, TDG, CTAS, RSG, WM, VRSK, URI, WAB, AME, XYL, IEX,
+     APD, ECL, SHW, PPG, NUE, FCX, NEM, IP, PKG, ALB, EMN, LYB, MLM, VMC,
+     CF, MOS, STLD, AOS, PNR,
+     # --- Utilities / REITs / Comm ---
+     NEE, DUK, SO, D, AEP, EXC, XEL, ED, EIX, PEG, WEC, ES, DTE, PPL, FE,
+     AEE, CMS, CNP, ATO, NI, PNW, LNT, AES, SPG, PSA, O, WELL, VTR, AVB,
+     EQR, ESS, MAA, UDR, BXP, KIM, REG, FRT, HST, PLD, AMT, CCI, SBAC,
+     EQIX, IRM, WY, DLR, OMC, IPG]
+
+backtest:
+  window: 1250          # T : taille de la fenêtre d'estimation (jours)
+  rebalance: 21         # rebalancement toutes les 21 séances (~1 mois)
+  n_assets: 100         # N par défaut (run isolé)
+  n_assets_grid: [50, 100, 200]   # grille multi-dimension
+  trading_days: 252     # annualisation
+  # sélection de l'univers à chaque rebalancement : les N tickers au plus
+  # gros dollar-volume moyen sur la fenêtre (proxy de capitalisation, ELW 2019)
+  selection: "dollar_volume"
+  gmv_constraint: "unconstrained"  # référence ELW 2019, shorts autorisés
+
+models:
+  garch:
+    p: 1
+    q: 1
+    dist: "normal"
+    rescale: 100        # rendements en % pour la stabilité numérique d'arch
+    n_jobs: 4           # fits univariés parallèles (résultats déterministes)
+    forecast_horizon: 1 # signal conditionnel principal, robustesse 21j ultérieure
+  dcc:
+    alpha0: 0.05        # point de départ de l'optimisation
+    beta0: 0.90
+    bound_sum: 0.999    # contrainte alpha + beta < bound_sum
+    optimizer: "SLSQP"
+    maxiter: 200
+    ftol: 1.0e-8
+    # vraisemblance : "full" (N petits) ou "composite" (paires contiguës,
+    # Pakel et al. 2014 / Engle-Ledoit-Wolf 2019) pour N >= composite_threshold
+    likelihood: "auto"
+    composite_threshold: 30
+    composite_pairs: "adjacent"
+
+evaluation:
+  costs: [0.0, 0.005, 0.01]       # coûts proportionnels au turnover
+  gammas: [1, 10]                 # aversion au risque (performance fee FKO)
+  dm_lags: 22                     # lags Newey-West (comme EC 2006, ~1 mois)
+  center_returns: true            # comparer les variances, pas les seconds moments
+  charge_initial_turnover: false
+  fee_daily_bound: 0.10           # borne numérique de résolution du fee
+  subperiods:
+    pre_crise:  ["2005-01-01", "2007-12-31"]
+    crise_2008: ["2008-01-01", "2009-12-31"]
+    inter:      ["2010-01-01", "2019-12-31"]
+    covid:      ["2020-01-01", "2021-12-31"]
+    post:       ["2022-01-01", "2025-12-31"]
+
+outputs:
+  tables_dir: "outputs/tables"
+  figures_dir: "outputs/figures"
+  backtest_path: "outputs/backtest_n100.pkl"
+  backtest_pattern: "outputs/backtest_n{n}.pkl"
+  dm_tests_path: "outputs/tables/dm_tests_n100.csv"
+  attribution_path: "outputs/tables/attribution_n100.csv"
+  economic_path: "outputs/tables/economic_value_n100.csv"
+  # intensite de shrinkage Ledoit-Wolf journalisee a chaque cellule LW
+  # (diagnostic rho par periode) ; ecrite uniquement lors d'un calcul
+  # frais de load_or_run (pas relue si outputs/backtest_n{n}.pkl existe deja)
+  diagnostics_lw_pattern: "outputs/diagnostics/lw_n{n}.csv"
+
+# Robustesses : ne JAMAIS ecrire dans les caches/tables ci-dessus.
+# Chaque run est tague par son horizon GARCH (1 = principal instrumente,
+# 21 = robustesse) ; horizon=1 sert a obtenir les diagnostics (Sigma_t,
+# fallbacks, alpha/beta) et les poids long-only, absents du cache principal.
+robustness:
+  garch_horizon_21: 21
+  n_assets: 100          # dimension par defaut pour un run isole (--horizon seul)
+  n_assets_grid: [50, 100, 200]  # dimensions couvertes par la grille complete de robustesse
+  cache_pattern: "outputs/robustness/backtest_n{n}_h{horizon}.pkl"
+  diagnostics_garch_pattern: "outputs/robustness/diagnostics_garch_n{n}_h{horizon}.csv"
+  diagnostics_dcc_pattern: "outputs/robustness/diagnostics_dcc_n{n}_h{horizon}.csv"
+  diagnostics_sigma_pattern: "outputs/robustness/diagnostics_sigma_n{n}_h{horizon}.csv"
+  tables_dir: "outputs/robustness/tables"
